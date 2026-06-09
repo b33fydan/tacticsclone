@@ -71,7 +71,7 @@ export default function BattleScreen() {
       resetAnimHooks();
       rendererRef.current = null;
     };
-  }, [b ? b.mapId + b.phase.replace('victory', 'x').replace('defeat', 'x') : 'none']);
+  }, [b ? `${b.mapId}:${b.phase === 'deploy'}` : 'none']);
 
   if (!b) return null;
 

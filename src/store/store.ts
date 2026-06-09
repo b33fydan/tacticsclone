@@ -26,5 +26,7 @@ export function useGame(): GameState {
 
 // Dev-only hook for tests/automation.
 if (import.meta.env.DEV && typeof window !== 'undefined') {
-  (window as any).__ev = { game, bump };
+  import('../systems/battle').then((battle) => {
+    (window as any).__ev = { game, bump, autoPlayTurn: battle.autoPlayTurn };
+  });
 }

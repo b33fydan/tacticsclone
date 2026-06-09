@@ -155,14 +155,17 @@ export class Renderer {
     if (drDrop > 0) this.drawFace(ctx, cx, cy, drDrop * ELEV, 'right', cliffImg);
     if (dlDrop > 0) this.drawFace(ctx, cx, cy, dlDrop * ELEV, 'left', cliffImg);
 
-    // top face
+    // top face — sample one of 4 texture quadrants per tile to break up repetition
     const img = getImage(`terr_${t.terrain}`);
     if (img) {
+      const hash = (t.x * 7 + t.y * 13 + t.x * t.y) & 3;
+      const sx = (hash & 1) * (img.width / 2);
+      const sy = (hash >> 1) * (img.height / 2);
       ctx.save();
       diamondPath(ctx, cx, cy);
       ctx.clip();
       ctx.transform(TILE_W / 2, TILE_H / 2, -TILE_W / 2, TILE_H / 2, cx, cy - TILE_H / 2);
-      ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, 1, 1);
+      ctx.drawImage(img, sx, sy, img.width / 2, img.height / 2, 0, 0, 1, 1);
       ctx.restore();
       if (t.terrain === 'water') {
         ctx.save();
@@ -209,12 +212,15 @@ export class Renderer {
   private drawFace(ctx: CanvasRenderingContext2D, cx: number, cy: number, drop: number, side: 'left' | 'right', img?: HTMLImageElement) {
     ctx.save();
     if (img) {
-      if (side === 'right') ctx.transform(TILE_W / 2, TILE_H / 2, 0, drop, cx, cy);
-      else ctx.transform(-TILE_W / 2, TILE_H / 2, 0, drop, cx, cy);
-      ctx.drawImage(img, 0, 0, img.width, img.height, 0, -0.001, 1, 1);
+      // map the face parallelogram: u runs along the tile edge, v straight down
+      if (side === 'right') ctx.transform(TILE_W / 2, -TILE_H / 2, 0, drop, cx, cy + TILE_H / 2);
+      else ctx.transform(-TILE_W / 2, -TILE_H / 2, 0, drop, cx, cy + TILE_H / 2);
+      // source height proportional to the drop so the rock strata aren't squashed
+      const srcH = Math.min(img.height, (img.height * drop) / 96);
+      ctx.drawImage(img, 0, 0, img.width, srcH, 0, -0.001, 1, 1);
       ctx.globalAlpha = side === 'right' ? 0.25 : 0.45;
       ctx.fillStyle = '#0c0a14';
-      ctx.fillRect(0, 0, 1, 1);
+      ctx.fillRect(0, -0.001, 1, 1.001);
     } else {
       ctx.beginPath();
       if (side === 'right') {

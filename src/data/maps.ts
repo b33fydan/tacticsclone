@@ -74,8 +74,8 @@ export const MAPS: Record<string, BattleMapDef> = {
     maxDeploy: 4,
     enemies: [
       { job: 'bulwark', level: 2, x: 8, y: 4, name: 'Rook', aiProfile: 'aggressive' },
-      { job: 'duskblade', level: 1, x: 7, y: 5, name: 'Cutter', aiProfile: 'aggressive' },
-      { job: 'duskblade', level: 1, x: 7, y: 2, name: 'Snare', aiProfile: 'aggressive' },
+      { job: 'duskblade', level: 1, x: 8, y: 6, name: 'Cutter', aiProfile: 'aggressive' },
+      { job: 'duskblade', level: 1, x: 8, y: 2, name: 'Snare', aiProfile: 'aggressive' },
       { job: 'skywarden', level: 1, x: 9, y: 2, name: 'Fletch', aiProfile: 'defensive' },
     ],
     objective: { type: 'rout', text: 'Defeat all enemies.', defeatText: 'The company falls at the crossing.' },
