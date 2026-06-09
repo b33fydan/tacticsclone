@@ -146,7 +146,7 @@ export function ActionPanel({ b }: { b: BattleState }) {
           onClick={() => { uiEnterItems(game); }}>
           <span>Item</span><span className="hint">{Object.values(game.inventory).reduce((a, v) => a + v, 0)} carried</span>
         </button>
-        {b.hasMoved && !b.hasActed && (
+        {b.hasMoved && !b.hasActed && b.moveOrigin != null && (
           <button className="menu-btn" onClick={() => { uiUndoMove(game); }}>
             <span>Undo Move</span>
           </button>

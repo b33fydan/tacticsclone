@@ -39,10 +39,11 @@ export function viewFor(u: Unit): UnitView {
 export function syncView(u: Unit) {
   const v = viewFor(u);
   const now = performance.now();
-  if (!walking.has(u.id)) { v.x = u.x; v.y = u.y; v.lift = 0; }
+  if (!animating.has(u.id)) { v.x = u.x; v.y = u.y; v.lift = 0; }
   if (u.ko) v.pose = 'ko';
   else if (now > v.poseUntil && v.pose !== 'walk') v.pose = 'idle';
-  v.fade = u.gone ? Math.max(0, v.fade) : 1;
+  // leave fade alone while KO'd/gone so the crystallize animation can play out
+  if (!u.ko && !u.gone) v.fade = 1;
 }
 
 export function resetViews() {
@@ -51,7 +52,8 @@ export function resetViews() {
   fxSprites.length = 0;
 }
 
-const walking = new Set<string>();
+// units whose view position is being animated; syncView leaves them alone
+const animating = new Set<string>();
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -107,7 +109,7 @@ export function makeAnimHooks(opts: {
     async unitWalk(u, path) {
       if (path.length < 2) return;
       const v = viewFor(u);
-      walking.add(u.id);
+      animating.add(u.id);
       v.pose = 'walk';
       try {
         const stepMs = 150;
@@ -126,7 +128,7 @@ export function makeAnimHooks(opts: {
           v.x = b.x; v.y = b.y; v.lift = 0;
         }
       } finally {
-        walking.delete(u.id);
+        animating.delete(u.id);
         v.pose = 'idle';
         v.poseUntil = 0;
       }
@@ -134,21 +136,26 @@ export function makeAnimHooks(opts: {
 
     async unitLunge(u, toward) {
       const v = viewFor(u);
+      animating.add(u.id);
       v.pose = 'attack';
       v.poseUntil = performance.now() + 450;
-      const dx = Math.sign(toward.x - u.x) * 0.25;
-      const dy = Math.sign(toward.y - u.y) * 0.25;
-      const t0 = performance.now();
-      const dur = 220;
-      while (true) {
-        const t = (performance.now() - t0) / dur;
-        if (t >= 1) break;
-        const k = Math.sin(Math.min(1, t) * Math.PI);
-        v.x = u.x + dx * k;
-        v.y = u.y + dy * k;
-        await sleep(16);
+      try {
+        const dx = Math.sign(toward.x - u.x) * 0.25;
+        const dy = Math.sign(toward.y - u.y) * 0.25;
+        const t0 = performance.now();
+        const dur = 220;
+        while (true) {
+          const t = (performance.now() - t0) / dur;
+          if (t >= 1) break;
+          const k = Math.sin(Math.min(1, t) * Math.PI);
+          v.x = u.x + dx * k;
+          v.y = u.y + dy * k;
+          await sleep(16);
+        }
+        v.x = u.x; v.y = u.y;
+      } finally {
+        animating.delete(u.id);
       }
-      v.x = u.x; v.y = u.y;
     },
 
     async castFlash(u, _ability) {

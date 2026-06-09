@@ -19,7 +19,7 @@ export default function BattleScreen() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<Renderer | null>(null);
   const [deploySel, setDeploySel] = useState<string | null>(null);
-  const dragRef = useRef<{ x: number; y: number; moved: boolean; panning: boolean }>({ x: 0, y: 0, moved: false, panning: false });
+  const dragRef = useRef<{ x: number; y: number; moved: boolean; down: boolean }>({ x: 0, y: 0, moved: false, down: false });
   const hoverKeyRef = useRef<string>('');
 
   // renderer lifecycle + anim hooks
@@ -78,13 +78,14 @@ export default function BattleScreen() {
   const mapDef = getMap(b.mapId);
 
   const onMouseDown = (e: React.MouseEvent) => {
-    dragRef.current = { x: e.clientX, y: e.clientY, moved: false, panning: e.button !== 2 };
+    if (e.button !== 0) return;
+    dragRef.current = { x: e.clientX, y: e.clientY, moved: false, down: true };
   };
   const onMouseMove = (e: React.MouseEvent) => {
     const renderer = rendererRef.current;
     if (!renderer || !game.battle) return;
     const rect = (e.target as HTMLElement).getBoundingClientRect();
-    if (e.buttons & 1 && dragRef.current.panning) {
+    if (dragRef.current.down && (e.buttons & 1)) {
       const dx = e.clientX - dragRef.current.x;
       const dy = e.clientY - dragRef.current.y;
       if (Math.abs(dx) + Math.abs(dy) > 4) {
@@ -103,8 +104,10 @@ export default function BattleScreen() {
     }
   };
   const onMouseUp = (e: React.MouseEvent) => {
-    if (e.button === 2) return;
-    if (dragRef.current.moved) return;
+    const wasDown = dragRef.current.down;
+    const hadMoved = dragRef.current.moved;
+    dragRef.current.down = false;
+    if (e.button !== 0 || !wasDown || hadMoved) return;
     const renderer = rendererRef.current;
     if (!renderer || !game.battle) return;
     const rect = (e.target as HTMLElement).getBoundingClientRect();
@@ -139,6 +142,7 @@ export default function BattleScreen() {
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
+        onMouseLeave={() => { dragRef.current.down = false; }}
         onContextMenu={(e) => { e.preventDefault(); uiCancel(game); }}
       />
 

@@ -186,8 +186,11 @@ export interface BattleResults {
   expGained: Record<string, number>;
   jpGained: Record<string, number>;
   levelUps: string[];            // unit names that leveled
-  gold: number;
-  itemsFound: string[];
+  gold: number;                  // display total; committed to the purse only on victory
+  itemsFound: string[];          // display names
+  treasureGold: number;          // staged treasure rewards, granted on victory
+  treasureItemIds: string[];
+  treasureJp: Record<string, number>;
   victory: boolean;
 }
 

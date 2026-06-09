@@ -39,7 +39,7 @@ function positionScore(b: BattleState, u: Unit, pos: XY, lowHp: boolean): number
   const dFoe = nearestDist(pos, foes);
   let score = 0;
   if (lowHp || profile === 'flee') {
-    score += Math.min(dFoe, 8) * 2.2;            // run away
+    score += dFoe * 2.2;                          // run away — gradient must persist at range
   } else if (profile === 'aggressive') {
     score -= dFoe * 1.4;                          // close in
   } else if (profile === 'defensive') {
@@ -49,8 +49,10 @@ function positionScore(b: BattleState, u: Unit, pos: XY, lowHp: boolean): number
     if (t && u.job === 'skywarden') score += t.h * 2.5;
     if (t && u.job === 'embercaller') score += t.h * 1.2;
   } else if (profile === 'support') {
-    const wounded = pals.filter((p) => p.hp < maxStats(p).hp * 0.7);
-    const anchor = wounded.length ? wounded : pals;
+    // only treat KO'd allies as an anchor if this unit can actually revive them
+    const canRevive = knownAbilities(u).some((id) => getAbility(id).type === 'revive');
+    const wounded = pals.filter((p) => (p.ko ? canRevive : p.hp < maxStats(p).hp * 0.7));
+    const anchor = wounded.length ? wounded : pals.filter((p) => !p.ko);
     if (anchor.length) score -= Math.min(...anchor.map((p) => manhattan(pos, p))) * 1.3;
     score += Math.min(dFoe, 5) * 0.7;
   }
@@ -76,9 +78,13 @@ function actionScore(b: BattleState, u: Unit, from: XY, ability: AbilityDef, tar
       }
       if (tgt.ko) continue;
       if (ability.type === 'heal') {
-        if (!sameSide(u, tgt)) continue;
         const est = estimateEffect(b, u, tgt, ability);
         const missing = maxStats(tgt).hp - tgt.hp;
+        if (!sameSide(u, tgt)) {
+          // healing the other side is worse than not healing at all
+          total -= Math.min(est.amount, missing) * 1.1;
+          continue;
+        }
         total += Math.min(est.amount, missing) * 0.95;
         continue;
       }
@@ -135,6 +141,9 @@ export function planTurn(b: BattleState, u: Unit, difficulty: Difficulty): AiPla
   const abilities = abilityChoices(u);
   const candidates: Candidate[] = [];
 
+  // flee-profile units (escort guests) value staying safe far above acting
+  const actWeight = u.aiProfile === 'flee' ? 0.25 : 1;
+
   // Move-then-act: from each reachable stop, try every ability/target
   for (const s of stops) {
     const here = positionScore(b, u, s, lowHp);
@@ -146,7 +155,7 @@ export function planTurn(b: BattleState, u: Unit, difficulty: Difficulty): AiPla
         candidates.push({
           moveTo: (s.x !== u.x || s.y !== u.y) ? s : undefined,
           action: { abilityId: ab.id, target: t },
-          facing: 'S', score: av + here,
+          facing: 'S', score: av * actWeight + here,
         });
       }
     }
@@ -165,7 +174,7 @@ export function planTurn(b: BattleState, u: Unit, difficulty: Difficulty): AiPla
     const sc = positionScore(b, u, s, true);
     if (sc > bestRetreatScore) { bestRetreatScore = sc; bestRetreat = s; }
   }
-  const wantsRetreat = lowHp || u.aiProfile === 'defensive' || u.aiProfile === 'support';
+  const wantsRetreat = lowHp || u.aiProfile === 'defensive' || u.aiProfile === 'support' || u.aiProfile === 'flee';
   if (wantsRetreat && bestRetreat && (bestRetreat.x !== cur.x || bestRetreat.y !== cur.y)) {
     for (const ab of abilities) {
       const targets = targetableTiles(b, u, cur, ab);
@@ -175,7 +184,7 @@ export function planTurn(b: BattleState, u: Unit, difficulty: Difficulty): AiPla
         candidates.push({
           action: { abilityId: ab.id, target: t },
           postMoveTo: bestRetreat,
-          facing: 'S', score: av + bestRetreatScore * 0.8,
+          facing: 'S', score: av * actWeight + bestRetreatScore * 0.8,
         });
       }
     }
@@ -188,9 +197,9 @@ export function planTurn(b: BattleState, u: Unit, difficulty: Difficulty): AiPla
   candidates.sort((a, z) => z.score - a.score);
   let chosen: Candidate;
   if (difficulty === 'easy') {
-    const floor = candidates[0].score * 0.55;
-    const ok = candidates.filter((c) => c.score >= floor);
-    chosen = pick(ok.slice(0, 6));
+    // sloppy play: pick randomly among the top few plans (score-relative floors
+    // break down when every score is negative, so slice by rank instead)
+    chosen = pick(candidates.slice(0, Math.min(6, candidates.length)));
   } else if (difficulty === 'normal') {
     // small wobble so fights don't feel scripted
     chosen = rand() < 0.85 ? candidates[0] : (candidates[1] ?? candidates[0]);

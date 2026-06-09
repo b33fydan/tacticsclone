@@ -4,7 +4,7 @@ import { JOBS, JOB_LIST } from '../data/jobs';
 import { ABILITIES, getAbility } from '../data/abilities';
 import { EQUIPMENT, getEquipment } from '../data/items';
 import { knownAbilities, learnAbility, maxStats } from '../entities/unit';
-import { changeJob, equipFromPool, unequipToPool } from '../game/flow';
+import { changeJob, equipFromPool, saveGame, unequipToPool } from '../game/flow';
 import { MANIFEST } from '../render/assets';
 import type { JobId, Unit } from '../entities/types';
 
@@ -122,8 +122,8 @@ function UnitDetail({ unit }: { unit: Unit }) {
                 >
                   <option value="">— none —</option>
                   {current && <option value={current}>{getEquipment(current).name} (equipped)</option>}
-                  {options.map((id, i) => (
-                    <option key={`${id}_${i}`} value={id}>{getEquipment(id).name}</option>
+                  {options.filter((id) => id !== current).map((id) => (
+                    <option key={id} value={id}>{getEquipment(id).name}</option>
                   ))}
                 </select>
                 {current && (
@@ -156,7 +156,7 @@ function UnitDetail({ unit }: { unit: Unit }) {
                 : (
                   <button
                     disabled={unit.jp < ab.jpCost}
-                    onClick={() => { learnAbility(unit, id, ab.jpCost); bump(); }}
+                    onClick={() => { if (learnAbility(unit, id, ab.jpCost)) saveGame(game); bump(); }}
                   >
                     Learn — {ab.jpCost} JP
                   </button>

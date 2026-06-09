@@ -140,6 +140,16 @@ async function main() {
   }
 
   check(campaignComplete(game), 'campaign completes');
+
+  // smoke-test the other difficulties (regression: easy once crashed the AI picker)
+  for (const diff of ['easy', 'hard'] as const) {
+    const g2 = newGameState();
+    startNewRun(g2, diff);
+    const won = await playBattle(g2, 'greenford');
+    const phase = g2.battle!.phase;
+    check(phase === 'victory' || phase === 'defeat', `${diff} difficulty battle terminates cleanly`);
+    console.log(`  ${diff} greenford smoke: ${phase}`);
+  }
   console.log(`\n— Final roster —`);
   for (const u of game.roster) {
     console.log(`  ${u.name}: Lv ${u.level} ${u.job}, ${u.jp} JP unspent, learned [${(u.learned[u.job] ?? []).join(', ')}]`);

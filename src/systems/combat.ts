@@ -194,7 +194,8 @@ export function buildForecast(b: BattleState, caster: Unit, ability: AbilityDef,
     if (target.ko) continue;
     if (ability.type === 'heal') {
       const est = estimateEffect(b, caster, target, ability);
-      targets.push({ unitId: target.id, name: target.name, hit: 100, amount: est.amount, kind: 'heal' });
+      const capped = Math.min(est.amount, maxStats(target).hp - target.hp);
+      targets.push({ unitId: target.id, name: target.name, hit: 100, amount: capped, kind: 'heal' });
       continue;
     }
     if (ability.type === 'buff') {

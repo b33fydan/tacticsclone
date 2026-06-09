@@ -10,7 +10,7 @@ import {
   applyAbility, basicAttackFor, buildForecast, effectiveStats, type CombatEvent,
 } from './combat';
 import {
-  aoeTiles, facingBetween, key, pathTo, reachableTiles, tileAt, targetableTiles, unitAt,
+  aoeTiles, facingBetween, key, pathTo, reachableTiles, sameSide, tileAt, targetableTiles, unitAt,
 } from './grid';
 import { advanceToNextEvent, makeCast } from './turnorder';
 import { planTurn } from '../ai/ai';
@@ -112,7 +112,10 @@ export function createBattleState(game: GameState, mapId: string): BattleState {
     hasMoved: false, hasActed: false, moveOrigin: null,
     log: [`— ${def.name} —`],
     ui: { mode: 'idle', aiActing: false },
-    results: { expGained: {}, jpGained: {}, levelUps: [], gold: 0, itemsFound: [], victory: false },
+    results: {
+      expGained: {}, jpGained: {}, levelUps: [], gold: 0, itemsFound: [],
+      treasureGold: 0, treasureItemIds: [], treasureJp: {}, victory: false,
+    },
     deployChoice: [],
     difficulty: game.difficulty,
   };
@@ -312,30 +315,36 @@ async function doWalk(game: GameState, u: Unit, dest: XY): Promise<boolean> {
   return true;
 }
 
-function claimTreasure(game: GameState, u: Unit) {
+/**
+ * Claim a treasure tile. Rewards are STAGED into results and only granted on
+ * victory (endBattle) — otherwise retrying a battle would farm the caches.
+ * Returns true if anything was claimed.
+ */
+function claimTreasure(game: GameState, u: Unit): boolean {
   const b = game.battle!;
-  if (u.team !== 'player') return;
+  if (u.team !== 'player') return false;
   const t = tileAt(b, u.x, u.y);
-  if (!t?.treasure || t.treasure.claimed) return;
+  if (!t?.treasure || t.treasure.claimed) return false;
   t.treasure.claimed = true;
   const parts: string[] = [];
   if (t.treasure.gold) {
-    game.gold += t.treasure.gold;
+    b.results.treasureGold += t.treasure.gold;
     b.results.gold += t.treasure.gold;
     parts.push(`${t.treasure.gold} gold`);
   }
   if (t.treasure.itemId) {
-    game.inventory[t.treasure.itemId] = (game.inventory[t.treasure.itemId] ?? 0) + 1;
+    b.results.treasureItemIds.push(t.treasure.itemId);
     const item = getConsumable(t.treasure.itemId);
     b.results.itemsFound.push(item.name);
     parts.push(item.name);
   }
   if (t.treasure.jp) {
-    u.jp += t.treasure.jp;
+    b.results.treasureJp[u.id] = (b.results.treasureJp[u.id] ?? 0) + t.treasure.jp;
     b.results.jpGained[u.id] = (b.results.jpGained[u.id] ?? 0) + t.treasure.jp;
     parts.push(`${t.treasure.jp} JP`);
   }
   log(b, `${u.name} found a cache: ${parts.join(', ')}!`);
+  return true;
 }
 
 function award(game: GameState, u: Unit, exp: number, jp: number) {
@@ -474,15 +483,18 @@ export function uiHoverTile(game: GameState, tile: XY | null) {
   const b = game.battle;
   if (!b) return;
   b.ui.hoverTile = tile ?? undefined;
-  if (b.ui.mode === 'move' && tile && b.ui.reachable) {
-    const entry = b.ui.reachable[key(tile.x, tile.y)];
-    b.ui.pathPreview = entry && entry.canStop ? pathTo(b.ui.reachable, tile) : undefined;
+  if (b.ui.mode === 'move' && b.ui.reachable) {
+    const entry = tile ? b.ui.reachable[key(tile.x, tile.y)] : undefined;
+    b.ui.pathPreview = tile && entry && entry.canStop ? pathTo(b.ui.reachable, tile) : undefined;
   }
-  if (b.ui.mode === 'target' && tile && b.ui.targetable?.some((t) => t.x === tile.x && t.y === tile.y)) {
+  if (b.ui.mode === 'target') {
     const u = activeUnit(b);
-    if (u) {
-      const ability = currentAbility(b, u);
-      if (ability) b.ui.aoePreview = aoeTiles(b, u, ability, tile);
+    const ability = u ? currentAbility(b, u) : null;
+    const valid = tile && b.ui.targetable?.some((t) => t.x === tile.x && t.y === tile.y);
+    if (valid && u && ability) {
+      b.ui.aoePreview = ability.type === 'teleport' ? [tile!] : aoeTiles(b, u, ability, tile!);
+    } else {
+      b.ui.aoePreview = undefined; // hovering off the valid area clears the preview
     }
   }
   hooks.onChange();
@@ -504,7 +516,9 @@ export async function uiClickMove(game: GameState, tile: XY) {
   u.x = tile.x; u.y = tile.y;
   if (path.length >= 2) u.facing = facingBetween(path[path.length - 2], path[path.length - 1]);
   b.hasMoved = true;
-  claimTreasure(game, u);
+  if (claimTreasure(game, u)) {
+    b.moveOrigin = null; // a claimed cache makes the move final — no free-loot undo
+  }
   b.ui.mode = 'unitMenu';
   hooks.onChange();
 }
@@ -596,11 +610,12 @@ export function uiClickTarget(game: GameState, tile: XY) {
     const target = unitAt(b, tile.x, tile.y);
     if (!target) return;
     const item = getConsumable(b.ui.selectedItemId);
-    if (item.kind === 'revive' && !target.ko) return;
+    if (item.kind === 'revive' && (!target.ko || !sameSide(u, target))) return;
     if (item.kind !== 'revive' && target.ko) return;
-    const amount = item.kind === 'heal' ? item.amount
-      : item.kind === 'mp' ? item.amount
-      : item.kind === 'revive' ? Math.round((maxStats(target).hp * item.amount) / 100)
+    const stats = maxStats(target);
+    const amount = item.kind === 'heal' ? Math.min(item.amount, stats.hp - target.hp)
+      : item.kind === 'mp' ? Math.min(item.amount, stats.mp - target.mp)
+      : item.kind === 'revive' ? Math.round((stats.hp * item.amount) / 100)
       : 0;
     b.ui.pendingTarget = tile;
     b.ui.forecast = {
@@ -660,11 +675,15 @@ export async function uiConfirmAction(game: GameState) {
   hooks.onChange();
   await executeAbilityAt(game, u, ability, target);
   b.hasActed = true;
-  if (b.phase === 'combat') {
-    b.ui.mode = 'unitMenu';
-    hooks.onChange();
-    checkEnd(game);
+  if (b.phase !== 'combat') return;
+  if (checkEnd(game)) return;
+  if (u.ko || u.gone) {
+    // caught in their own blast — the turn ends immediately
+    await finalizeTurn(game, u.facing);
+    return;
   }
+  b.ui.mode = 'unitMenu';
+  hooks.onChange();
 }
 
 async function executeItem(game: GameState, user: Unit, itemId: string, targetTile: XY) {
@@ -672,6 +691,8 @@ async function executeItem(game: GameState, user: Unit, itemId: string, targetTi
   const item = getConsumable(itemId);
   const target = unitAt(b, targetTile.x, targetTile.y);
   if (!target || !(game.inventory[itemId] > 0)) return;
+  if (item.kind === 'revive' && (!target.ko || !sameSide(user, target))) return;
+  if (item.kind !== 'revive' && target.ko) return;
   game.inventory[itemId] -= 1;
   if (game.inventory[itemId] <= 0) delete game.inventory[itemId];
   if (user.x !== targetTile.x || user.y !== targetTile.y) {
@@ -829,7 +850,14 @@ function endBattle(game: GameState, victory: boolean): boolean {
   b.results.victory = victory;
   if (victory) {
     b.results.gold += def.rewardGold;
-    game.gold += def.rewardGold;
+    game.gold += def.rewardGold + b.results.treasureGold;
+    for (const id of b.results.treasureItemIds) {
+      game.inventory[id] = (game.inventory[id] ?? 0) + 1;
+    }
+    for (const [uid, jp] of Object.entries(b.results.treasureJp)) {
+      const u = b.units.find((x) => x.id === uid);
+      if (u) u.jp += jp;
+    }
     log(b, `Victory! Earned ${def.rewardGold} gold.`);
   } else {
     log(b, def.objective.defeatText);
