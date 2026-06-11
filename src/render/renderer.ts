@@ -182,9 +182,16 @@ export class Renderer {
       ctx.stroke();
     }
 
-    // subtle grid line
+    // checkerboard tint on stone, echoing the paper-diorama floor
+    if (t.terrain === 'stone' && ((t.x + t.y) & 1) === 1) {
+      diamondPath(ctx, cx, cy);
+      ctx.fillStyle = 'rgba(120, 90, 55, 0.14)';
+      ctx.fill();
+    }
+
+    // subtle grid line — warm ink on paper
     diamondPath(ctx, cx, cy);
-    ctx.strokeStyle = 'rgba(20, 16, 28, 0.28)';
+    ctx.strokeStyle = 'rgba(95, 75, 48, 0.32)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
@@ -235,7 +242,7 @@ export class Renderer {
         ctx.lineTo(cx - TILE_W / 2, cy + drop);
       }
       ctx.closePath();
-      ctx.fillStyle = side === 'right' ? '#4d4357' : '#3a3344';
+      ctx.fillStyle = side === 'right' ? '#b59a72' : '#9a8059';
       ctx.fill();
     }
     ctx.restore();
@@ -260,11 +267,11 @@ export class Renderer {
     const { x: cx, y: cy } = isoOf(t.x, t.y, t.h);
     const pulse = 0.6 + 0.4 * Math.sin(now / 300);
     ctx.save();
-    ctx.fillStyle = `rgba(255, 215, 105, ${0.55 * pulse})`;
+    ctx.fillStyle = `rgba(200, 144, 26, ${0.55 * pulse})`;
     ctx.beginPath();
     ctx.ellipse(cx, cy, 10, 5, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#ffd769';
+    ctx.fillStyle = '#a8721a';
     ctx.font = 'bold 13px serif';
     ctx.textAlign = 'center';
     ctx.fillText('✦', cx, cy - 4 - pulse * 3);
@@ -398,12 +405,10 @@ export class Renderer {
       if (fx.mode === 'fall') { yOff = -64 + ease * 44; alpha = Math.min(1, alpha * 1.4); }
       ctx.globalAlpha = Math.max(0, alpha);
       if (img) {
-        // FX sprites are painted on black; screen-blend so black reads as transparent
-        ctx.globalCompositeOperation = 'screen';
+        // FX are transparent paper-cut sprites; draw normally
         const w = 72 * scale;
         const hh = (img.height / img.width) * w;
         ctx.drawImage(img, iso.x - w / 2, iso.y + yOff - hh / 2, w, hh);
-        ctx.globalCompositeOperation = 'source-over';
       } else {
         ctx.fillStyle = fx.key === 'fx_heal' || fx.key === 'fx_revive' ? '#9be77f'
           : fx.key === 'fx_fire' ? '#ff8c3a' : fx.key === 'fx_poison' ? '#86c43f' : '#ffd9a0';

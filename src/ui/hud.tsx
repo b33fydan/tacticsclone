@@ -101,7 +101,7 @@ export function UnitPanel({ b }: { b: BattleState }) {
             <span>ATK {eff.atk}</span><span>MAG {eff.mag}</span><span>SPD {eff.spd}</span>
             <span>MV {eff.move}</span><span>JP {u.jp}</span>
           </div>
-          {u.ko && <div style={{ color: '#b894ff', marginTop: 4 }}>Down — lost in {u.koCounter} turn{u.koCounter === 1 ? '' : 's'}</div>}
+          {u.ko && <div style={{ color: '#8a4fc9', marginTop: 4 }}>Down — lost in {u.koCounter} turn{u.koCounter === 1 ? '' : 's'}</div>}
           {u.statuses.length > 0 && (
             <div className="statuses">
               {u.statuses.map((st) => (
@@ -167,7 +167,7 @@ export function ActionPanel({ b }: { b: BattleState }) {
           <button key={ab.id} className="ability-btn" disabled={ab.mpCost > u.mp}
             title={ab.desc}
             onClick={() => { uiSelectAbility(game, ab.id); }}>
-            <img src={MANIFEST[ab.icon]} alt="" style={{ background: '#2c2440' }} />
+            <img src={MANIFEST[ab.icon]} alt="" style={{ background: '#e8dcc0' }} />
             <span className="ab-name">
               {ab.name}
               <small>rng {ab.rangeMin === ab.rangeMax ? ab.rangeMax : `${ab.rangeMin}–${ab.rangeMax}`} · {AOE_LABEL[ab.aoe]}{ab.castTicks ? ' · charges' : ''}</small>
@@ -189,7 +189,7 @@ export function ActionPanel({ b }: { b: BattleState }) {
           const def = getConsumable(id);
           return (
             <button key={id} className="ability-btn" title={def.desc} onClick={() => { uiSelectItem(game, id); }}>
-              <img src={MANIFEST[def.icon]} alt="" style={{ background: '#2c2440' }} />
+              <img src={MANIFEST[def.icon]} alt="" style={{ background: '#e8dcc0' }} />
               <span className="ab-name">{def.name}<small>{def.desc}</small></span>
               <span className="ab-mp">×{count}</span>
             </button>
@@ -245,8 +245,8 @@ export function ActionPanel({ b }: { b: BattleState }) {
             </tbody>
           </table>
         )}
-        {f.mpCost > 0 && <div style={{ fontSize: 12, color: '#6db4ff' }}>Costs {f.mpCost} MP</div>}
-        {f.castTicks ? <div style={{ fontSize: 12, color: '#c77dff' }}>Charges — resolves after a delay (see turn bar)</div> : null}
+        {f.mpCost > 0 && <div style={{ fontSize: 12, color: '#2f6fb2' }}>Costs {f.mpCost} MP</div>}
+        {f.castTicks ? <div style={{ fontSize: 12, color: '#8a4fc9' }}>Charges — resolves after a delay (see turn bar)</div> : null}
         <div className="confirm-row">
           <button className="primary" onClick={() => { void uiConfirmAction(game); }}>Confirm</button>
           <button onClick={() => uiCancel(game)}>Cancel</button>

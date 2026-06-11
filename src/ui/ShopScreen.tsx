@@ -14,7 +14,7 @@ export default function ShopScreen() {
 
   return (
     <div className="screen">
-      <div className="bg-overlay" style={{ background: '#100d1a' }} />
+      <div className="bg-overlay" style={{ background: '#ece1c8' }} />
       <div className="mgmt">
         <div className="campaign-head">
           <h1>WAYFARER'S MARKET</h1>
@@ -37,7 +37,7 @@ export default function ShopScreen() {
                 + game.roster.filter((u) => Object.values(u.equipment).includes(id)).length;
               return (
                 <div key={id} className="panel shop-item">
-                  <img src={MANIFEST[def.icon]} alt="" style={{ background: '#2c2440' }} />
+                  <img src={MANIFEST[def.icon]} alt="" style={{ background: '#e8dcc0' }} />
                   <div className="si-info">
                     <b>{def.name}</b>
                     <span>
@@ -61,7 +61,7 @@ export default function ShopScreen() {
               const def = getConsumable(id);
               return (
                 <div key={id} className="panel shop-item">
-                  <img src={MANIFEST[def.icon]} alt="" style={{ background: '#2c2440' }} />
+                  <img src={MANIFEST[def.icon]} alt="" style={{ background: '#e8dcc0' }} />
                   <div className="si-info">
                     <b>{def.name}</b>
                     <span>{def.desc} · have ×{game.inventory[id] ?? 0}</span>
@@ -84,7 +84,7 @@ export default function ShopScreen() {
               const def = getEquipment(id);
               return (
                 <div key={`${id}_${i}`} className="panel shop-item">
-                  <img src={MANIFEST[def.icon]} alt="" style={{ background: '#2c2440' }} />
+                  <img src={MANIFEST[def.icon]} alt="" style={{ background: '#e8dcc0' }} />
                   <div className="si-info">
                     <b>{def.name}</b>
                     <span>{Object.entries(def.mods).map(([k, v]) => `${k.toUpperCase()} +${v}`).join(', ')}</span>

@@ -26,7 +26,7 @@ export default function PartyScreen() {
 
   return (
     <div className="screen">
-      <div className="bg-overlay" style={{ background: '#100d1a' }} />
+      <div className="bg-overlay" style={{ background: '#ece1c8' }} />
       <div className="mgmt">
         <div className="campaign-head">
           <h1>PARTY & JOBS</h1>
@@ -146,9 +146,9 @@ function UnitDetail({ unit }: { unit: Unit }) {
           const learned = known.includes(id);
           return (
             <div key={id} className="ability-row">
-              <img src={MANIFEST[ab.icon]} alt="" style={{ background: '#2c2440' }} />
+              <img src={MANIFEST[ab.icon]} alt="" style={{ background: '#e8dcc0' }} />
               <div className="ab-info">
-                <b>{ab.name}</b> <span style={{ color: '#6db4ff', fontSize: 12 }}>{ab.mpCost > 0 ? `${ab.mpCost} MP` : ''}</span>
+                <b>{ab.name}</b> <span style={{ color: '#2f6fb2', fontSize: 12 }}>{ab.mpCost > 0 ? `${ab.mpCost} MP` : ''}</span>
                 <p>{ab.desc}</p>
               </div>
               {learned

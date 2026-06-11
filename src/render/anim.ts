@@ -60,10 +60,10 @@ function sleep(ms: number): Promise<void> {
 }
 
 function eventColor(ev: CombatEvent): string {
-  if (ev.miss) return '#cfd2da';
-  if (ev.revived) return '#ffe9a8';
-  if (ev.heal !== undefined) return '#7be37b';
-  return '#ff7a6b';
+  if (ev.miss) return '#efe8d8';
+  if (ev.revived) return '#e8b53a';
+  if (ev.heal !== undefined) return '#6fd06f';
+  return '#ff6a55';
 }
 
 function eventText(ev: CombatEvent): string {
