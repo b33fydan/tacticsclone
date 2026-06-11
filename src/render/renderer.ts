@@ -13,12 +13,13 @@ const TEAM_COLOR: Record<string, string> = { player: '#3f8cff', enemy: '#e0463c'
 
 export class Camera {
   x = 0; y = 0;            // screen-space offset of grid origin
+  zoom = 1.35;
   private tween?: { fx: number; fy: number; tx: number; ty: number; t0: number; dur: number };
 
   centerOn(canvas: HTMLCanvasElement, b: BattleState, tile: XY, smooth: boolean) {
     const iso = isoOf(tile.x, tile.y, tileH(b, tile));
-    const tx = canvas.clientWidth / 2 - iso.x;
-    const ty = canvas.clientHeight / 2 - iso.y;
+    const tx = canvas.clientWidth / 2 - iso.x * this.zoom;
+    const ty = canvas.clientHeight / 2 - iso.y * this.zoom;
     if (!smooth) { this.x = tx; this.y = ty; return; }
     this.tween = { fx: this.x, fy: this.y, tx, ty, t0: performance.now(), dur: 360 };
   }
@@ -71,8 +72,8 @@ export class Renderer {
 
   /** Convert a mouse position to a tile, honoring elevation (front tiles win). */
   pick(b: BattleState, mx: number, my: number): XY | null {
-    const px = mx - this.camera.x;
-    const py = my - this.camera.y;
+    const px = (mx - this.camera.x) / this.camera.zoom;
+    const py = (my - this.camera.y) / this.camera.zoom;
     const order: Tile[] = [];
     for (const row of b.tiles) for (const t of row) order.push(t);
     order.sort((a, z) => (z.x + z.y) - (a.x + a.y) || z.h - a.h);
@@ -98,6 +99,7 @@ export class Renderer {
     this.camera.update();
     ctx.save();
     ctx.translate(this.camera.x, this.camera.y);
+    ctx.scale(this.camera.zoom, this.camera.zoom);
 
     const now = performance.now();
     for (const u of b.units) syncView(u);
