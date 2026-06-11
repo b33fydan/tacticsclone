@@ -169,14 +169,6 @@ export class Renderer {
       ctx.transform(TILE_W / 2, TILE_H / 2, -TILE_W / 2, TILE_H / 2, cx, cy - TILE_H / 2);
       ctx.drawImage(img, sx, sy, img.width / 2, img.height / 2, 0, 0, 1, 1);
       ctx.restore();
-      if (t.terrain === 'stone' && ((t.x + t.y) & 1) === 1) {
-        // checkerboard plaza: darken alternate stone tiles toward kraft tan
-        ctx.save();
-        diamondPath(ctx, cx, cy);
-        ctx.fillStyle = 'rgba(146, 106, 62, 0.28)';
-        ctx.fill();
-        ctx.restore();
-      }
       if (t.terrain === 'water') {
         ctx.save();
         diamondPath(ctx, cx, cy);
@@ -195,7 +187,7 @@ export class Renderer {
     // checkerboard tint on stone, echoing the paper-diorama floor
     if (t.terrain === 'stone' && ((t.x + t.y) & 1) === 1) {
       diamondPath(ctx, cx, cy);
-      ctx.fillStyle = 'rgba(120, 90, 55, 0.14)';
+      ctx.fillStyle = 'rgba(139, 102, 60, 0.38)';
       ctx.fill();
     }
 
