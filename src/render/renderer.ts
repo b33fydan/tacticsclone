@@ -14,10 +14,12 @@ const TEAM_COLOR: Record<string, string> = { player: '#3f8cff', enemy: '#e0463c'
 export class Camera {
   x = 0; y = 0;            // screen-space offset of grid origin
   zoom = 1.35;
+  rot = 0;                 // view rotation in clockwise quarter turns (0-3)
   private tween?: { fx: number; fy: number; tx: number; ty: number; t0: number; dur: number };
 
   centerOn(canvas: HTMLCanvasElement, b: BattleState, tile: XY, smooth: boolean) {
-    const iso = isoOf(tile.x, tile.y, tileH(b, tile));
+    const v = viewOf(this.rot, b.w, b.h, tile.x, tile.y);
+    const iso = isoOf(v.x, v.y, tileH(b, tile));
     const tx = canvas.clientWidth / 2 - iso.x * this.zoom;
     const ty = canvas.clientHeight / 2 - iso.y * this.zoom;
     if (!smooth) { this.x = tx; this.y = ty; return; }
@@ -27,6 +29,31 @@ export class Camera {
   pan(dx: number, dy: number) {
     this.tween = undefined;
     this.x += dx; this.y += dy;
+  }
+
+  /** Zoom by `factor`, keeping the point under (mx, my) fixed on screen. */
+  zoomAt(mx: number, my: number, factor: number) {
+    const z = Math.min(2.6, Math.max(0.7, this.zoom * factor));
+    if (z === this.zoom) return;
+    this.tween = undefined;
+    this.x = mx - ((mx - this.x) * z) / this.zoom;
+    this.y = my - ((my - this.y) * z) / this.zoom;
+    this.zoom = z;
+  }
+
+  /** Rotate the view a quarter turn, keeping the screen-center point in place. */
+  rotate(canvas: HTMLCanvasElement, b: BattleState, dir: 1 | -1) {
+    const cw = canvas.clientWidth / 2, ch = canvas.clientHeight / 2;
+    const px = (cw - this.x) / this.zoom, py = (ch - this.y) / this.zoom;
+    const vx = (py / (TILE_H / 2) + px / (TILE_W / 2)) / 2;
+    const vy = (py / (TILE_H / 2) - px / (TILE_W / 2)) / 2;
+    const focus = worldOf(this.rot, b.w, b.h, vx, vy);
+    this.rot = (this.rot + dir + 4) & 3;
+    const v = viewOf(this.rot, b.w, b.h, focus.x, focus.y);
+    const iso = isoOf(v.x, v.y, 0);
+    this.tween = undefined;
+    this.x = cw - iso.x * this.zoom;
+    this.y = ch - iso.y * this.zoom;
   }
 
   update() {
@@ -45,6 +72,26 @@ export class Camera {
 
 function isoOf(x: number, y: number, h: number): XY {
   return { x: (x - y) * (TILE_W / 2), y: (x + y) * (TILE_H / 2) - h * ELEV };
+}
+
+/** World grid coords -> rotated view coords (works for fractional positions). */
+function viewOf(rot: number, w: number, h: number, x: number, y: number): XY {
+  switch (rot & 3) {
+    case 1: return { x: y, y: (w - 1) - x };
+    case 2: return { x: (w - 1) - x, y: (h - 1) - y };
+    case 3: return { x: (h - 1) - y, y: x };
+    default: return { x, y };
+  }
+}
+
+/** Rotated view coords -> world grid coords (inverse of viewOf). */
+function worldOf(rot: number, w: number, h: number, vx: number, vy: number): XY {
+  switch (rot & 3) {
+    case 1: return { x: (w - 1) - vy, y: vx };
+    case 2: return { x: (w - 1) - vx, y: (h - 1) - vy };
+    case 3: return { x: vy, y: (h - 1) - vx };
+    default: return { x: vx, y: vy };
+  }
 }
 
 function tileH(b: BattleState, t: XY): number {
@@ -70,15 +117,32 @@ export class Renderer {
 
   constructor(private canvas: HTMLCanvasElement) {}
 
+  /** Iso position of a world-grid point under the current view rotation. */
+  private vIso(b: BattleState, x: number, y: number, h: number): XY {
+    const v = viewOf(this.camera.rot, b.w, b.h, x, y);
+    return isoOf(v.x, v.y, h);
+  }
+
+  /** World direction vector -> rotated view direction vector. */
+  private vDir(dx: number, dy: number): XY {
+    switch (this.camera.rot & 3) {
+      case 1: return { x: dy, y: -dx };
+      case 2: return { x: -dx, y: -dy };
+      case 3: return { x: -dy, y: dx };
+      default: return { x: dx, y: dy };
+    }
+  }
+
   /** Convert a mouse position to a tile, honoring elevation (front tiles win). */
   pick(b: BattleState, mx: number, my: number): XY | null {
     const px = (mx - this.camera.x) / this.camera.zoom;
     const py = (my - this.camera.y) / this.camera.zoom;
-    const order: Tile[] = [];
-    for (const row of b.tiles) for (const t of row) order.push(t);
-    order.sort((a, z) => (z.x + z.y) - (a.x + a.y) || z.h - a.h);
-    for (const t of order) {
-      const iso = isoOf(t.x, t.y, t.h);
+    const rot = this.camera.rot;
+    const order: { t: Tile; v: XY }[] = [];
+    for (const row of b.tiles) for (const t of row) order.push({ t, v: viewOf(rot, b.w, b.h, t.x, t.y) });
+    order.sort((a, z) => (z.v.x + z.v.y) - (a.v.x + a.v.y) || z.t.h - a.t.h);
+    for (const { t, v } of order) {
+      const iso = isoOf(v.x, v.y, t.h);
       const dx = Math.abs(px - iso.x) / (TILE_W / 2);
       const dy = Math.abs(py - iso.y) / (TILE_H / 2);
       if (dx + dy <= 1) return { x: t.x, y: t.y };
@@ -106,34 +170,40 @@ export class Renderer {
 
     const hl = collectHighlights(b);
 
-    // draw tiles and occupants interleaved by depth (x + y)
-    const maxSum = b.w + b.h - 2;
+    // draw tiles and occupants interleaved by view-space depth (vx + vy)
+    const rot = this.camera.rot;
+    const vw = (rot & 1) ? b.h : b.w;
+    const vh = (rot & 1) ? b.w : b.h;
+    const maxSum = vw + vh - 2;
+    const vSum = (x: number, y: number) => { const v = viewOf(rot, b.w, b.h, x, y); return v.x + v.y; };
     const unitsBySum = new Map<number, Unit[]>();
     for (const u of b.units) {
       if (u.gone && viewFor(u).fade <= 0) continue;
       if (u.x < 0) continue;
       const v = viewFor(u);
-      const s = Math.round(v.x + v.y);
+      const s = Math.round(vSum(v.x, v.y));
       const arr = unitsBySum.get(s) ?? [];
       arr.push(u);
       unitsBySum.set(s, arr);
     }
 
     for (let s = 0; s <= maxSum; s++) {
-      for (let y = 0; y < b.h; y++) {
-        const x = s - y;
-        if (x < 0 || x >= b.w) continue;
-        this.drawTileBlock(ctx, b, b.tiles[y][x], hl, now);
+      for (let vy = 0; vy < vh; vy++) {
+        const vx = s - vy;
+        if (vx < 0 || vx >= vw) continue;
+        const wpt = worldOf(rot, b.w, b.h, vx, vy);
+        this.drawTileBlock(ctx, b, b.tiles[wpt.y][wpt.x], hl, now);
       }
-      for (let y = 0; y < b.h; y++) {
-        const x = s - y;
-        if (x < 0 || x >= b.w) continue;
-        const t = b.tiles[y][x];
-        if (t.prop) this.drawProp(ctx, t);
-        if (t.treasure && !t.treasure.claimed) this.drawTreasure(ctx, t, now);
+      for (let vy = 0; vy < vh; vy++) {
+        const vx = s - vy;
+        if (vx < 0 || vx >= vw) continue;
+        const wpt = worldOf(rot, b.w, b.h, vx, vy);
+        const t = b.tiles[wpt.y][wpt.x];
+        if (t.prop) this.drawProp(ctx, b, t);
+        if (t.treasure && !t.treasure.claimed) this.drawTreasure(ctx, b, t, now);
       }
       const units = unitsBySum.get(s) ?? [];
-      units.sort((a, z) => (viewFor(a).x + viewFor(a).y) - (viewFor(z).x + viewFor(z).y));
+      units.sort((a, z) => vSum(viewFor(a).x, viewFor(a).y) - vSum(viewFor(z).x, viewFor(z).y));
       for (const u of units) this.drawUnit(ctx, b, u, now);
     }
 
@@ -143,13 +213,17 @@ export class Renderer {
   }
 
   private drawTileBlock(ctx: CanvasRenderingContext2D, b: BattleState, t: Tile, hl: HighlightMap, now: number) {
-    const { x: cx, y: cy } = isoOf(t.x, t.y, t.h);
+    const { x: cx, y: cy } = this.vIso(b, t.x, t.y, t.h);
     const env = getMap(b.mapId).envKey;
 
-    // cliff faces down to neighbors (or a base at map edges)
-    // (x+1, y) neighbor is down-right on screen; (x, y+1) is down-left
-    const faceDR = b.tiles[t.y]?.[t.x + 1];
-    const faceDL = b.tiles[t.y + 1]?.[t.x];
+    // cliff faces down to the screen-down neighbors (or a base at map edges);
+    // under rotation those are the +x/+y neighbors in *view* space
+    const rot = this.camera.rot;
+    const v = viewOf(rot, b.w, b.h, t.x, t.y);
+    const nDR = worldOf(rot, b.w, b.h, v.x + 1, v.y);
+    const nDL = worldOf(rot, b.w, b.h, v.x, v.y + 1);
+    const faceDR = b.tiles[nDR.y]?.[nDR.x];
+    const faceDL = b.tiles[nDL.y]?.[nDL.x];
     const baseH = -1; // map edges drop one extra step
     const drDrop = (faceDR ? t.h - faceDR.h : t.h - baseH);
     const dlDrop = (faceDL ? t.h - faceDL.h : t.h - baseH);
@@ -250,8 +324,8 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawProp(ctx: CanvasRenderingContext2D, t: Tile) {
-    const { x: cx, y: cy } = isoOf(t.x, t.y, t.h);
+  private drawProp(ctx: CanvasRenderingContext2D, b: BattleState, t: Tile) {
+    const { x: cx, y: cy } = this.vIso(b, t.x, t.y, t.h);
     const img = getImage(`prop_${t.prop}`);
     if (img) {
       const w = t.prop === 'tree' ? 84 : 56;
@@ -265,8 +339,8 @@ export class Renderer {
     }
   }
 
-  private drawTreasure(ctx: CanvasRenderingContext2D, t: Tile, now: number) {
-    const { x: cx, y: cy } = isoOf(t.x, t.y, t.h);
+  private drawTreasure(ctx: CanvasRenderingContext2D, b: BattleState, t: Tile, now: number) {
+    const { x: cx, y: cy } = this.vIso(b, t.x, t.y, t.h);
     const pulse = 0.6 + 0.4 * Math.sin(now / 300);
     ctx.save();
     ctx.fillStyle = `rgba(200, 144, 26, ${0.55 * pulse})`;
@@ -288,7 +362,7 @@ export class Renderer {
     const fx2 = Math.floor(v.x), fy2 = Math.floor(v.y);
     const h2 = b.tiles[Math.ceil(v.y)]?.[Math.ceil(v.x)]?.h ?? h;
     const hMix = (b.tiles[fy2]?.[fx2]?.h ?? h) * 0.5 + h2 * 0.5;
-    const iso = isoOf(v.x, v.y, hMix);
+    const iso = this.vIso(b, v.x, v.y, hMix);
     const cx = iso.x, cy = iso.y - v.lift;
 
     ctx.save();
@@ -307,7 +381,9 @@ export class Renderer {
 
     const pose: Pose = u.ko ? 'ko' : v.pose;
     const img = unitSprite(u.job, pose);
-    const flip = u.facing === 'W' || u.facing === 'N';
+    const wd = { N: [0, -1], E: [1, 0], S: [0, 1], W: [-1, 0] }[u.facing];
+    const vd = this.vDir(wd[0], wd[1]);
+    const flip = vd.x + vd.y < 0;
     if (img) {
       const w = 58;
       const hh = (img.height / img.width) * w;
@@ -348,9 +424,9 @@ export class Renderer {
       }
     }
 
-    // facing indicator: small wedge on the tile edge
+    // facing indicator: small wedge on the tile edge (rotates with the view)
     if (!u.ko) {
-      const dir = { N: [0.5, -0.25], E: [0.5, 0.25], S: [-0.5, 0.25], W: [-0.5, -0.25] }[u.facing];
+      const dir = [0.5 * (vd.x - vd.y), 0.25 * (vd.x + vd.y)];
       ctx.fillStyle = active ? '#ffd76a' : 'rgba(255,255,255,0.65)';
       ctx.beginPath();
       ctx.arc(cx + dir[0] * TILE_W * 0.42, cy + dir[1] * TILE_H * 0.84, 2.6, 0, Math.PI * 2);
@@ -396,7 +472,7 @@ export class Renderer {
       if (t >= 1) { fxSprites.splice(i, 1); continue; }
       if (t < 0) continue;
       const h = tileH(b, fx.tile);
-      const iso = isoOf(fx.tile.x, fx.tile.y, h);
+      const iso = this.vIso(b, fx.tile.x, fx.tile.y, h);
       const img = getImage(fx.key);
       ctx.save();
       const ease = 1 - Math.pow(1 - t, 2);
@@ -429,7 +505,7 @@ export class Renderer {
       if (t >= 1) { floatTexts.splice(i, 1); continue; }
       if (t < 0) continue;
       const h = tileH(b, ft.tile);
-      const iso = isoOf(ft.tile.x, ft.tile.y, h);
+      const iso = this.vIso(b, ft.tile.x, ft.tile.y, h);
       ctx.save();
       ctx.globalAlpha = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
       ctx.font = 'bold 16px "Georgia", serif';

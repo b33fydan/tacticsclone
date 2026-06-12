@@ -63,11 +63,21 @@ export default function BattleScreen() {
       if (e.key === 'ArrowDown') renderer.camera.pan(0, -pan);
       if (e.key === 'ArrowLeft') renderer.camera.pan(pan, 0);
       if (e.key === 'ArrowRight') renderer.camera.pan(-pan, 0);
+      if (e.key === 'q' || e.key === 'Q') renderer.camera.rotate(canvas, game.battle, -1);
+      if (e.key === 'e' || e.key === 'E') renderer.camera.rotate(canvas, game.battle, 1);
     };
     window.addEventListener('keydown', onKey);
+    const onWheel = (e: WheelEvent) => {
+      if (!game.battle) return;
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      renderer.camera.zoomAt(e.clientX - rect.left, e.clientY - rect.top, Math.exp(-e.deltaY * 0.0016));
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKey);
+      canvas.removeEventListener('wheel', onWheel);
       resetAnimHooks();
       rendererRef.current = null;
     };
@@ -159,7 +169,7 @@ export default function BattleScreen() {
       )}
       <ResultsOverlay b={b} />
       {b.phase === 'combat' && (
-        <div className="kbd-hint">Left-click: select · Drag: pan camera · Right-click / Esc: cancel · Hover: inspect</div>
+        <div className="kbd-hint">Left-click: select · Drag: pan · Scroll: zoom · Q/E: rotate · Right-click / Esc: cancel</div>
       )}
     </div>
   );
